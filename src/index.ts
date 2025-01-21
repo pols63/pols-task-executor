@@ -56,6 +56,7 @@ const onInterval = (pTaskExecutor: PTaskExecutor, execute: boolean) => {
 	)
 
 	if (execute) {
+		pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: 'Revisando tareas a ejecutar' })
 		for (const task of Object.values(pTaskExecutor.tasks)) {
 			if (task.enabled != null && !task.enabled) continue
 
@@ -125,14 +126,14 @@ const onInterval = (pTaskExecutor: PTaskExecutor, execute: boolean) => {
 					}
 
 					/* Verifica si, de acuerdo a la cantidad indicada en every, la tarea se debe ejecutar */
-					if (endTime.minutesDifference(startTime) % schedule.every != 0) continue
+					if (now.minutesDifference(startTime) % schedule.every != 0) continue
 				} else if ('minutes' in schedule || 'hours' in schedule) {
 					if (schedule.hours?.length && !schedule.hours.includes(now.hour)) continue
 					if (schedule.minutes?.length && !schedule.minutes.includes(now.minute)) continue
 				} else {
 					continue
 				}
-				success = false
+				success = true
 			}
 
 			if (success) {
@@ -141,30 +142,41 @@ const onInterval = (pTaskExecutor: PTaskExecutor, execute: boolean) => {
 
 				pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} iniciada` })
 
-				const process = spawn(task.command, task.arguments ?? [], {
-					cwd: task.workPath,
-					stdio: 'inherit', // Hereda la entrada y salida estándar
-				})
+				// const process = spawn('cmd.exe', ['/c', 'npx'], {
+				// 	cwd: task.workPath,
+				// 	// stdio: 'inherit', // Hereda la entrada y salida estándar
+				// })
 
-				process.on('close', (code) => {
-					task.state = PTaskState.repose
-					task.runningEnd = new PDate
-					pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} finalizada (Exitcode ${code})` })
-				})
+				try {
+					const process = spawn(task.command, task.arguments ?? [], {
+						cwd: task.workPath,
+						stdio: 'pipe',
+					})
 
-				process.on('error', (error) => {
-					task.state = PTaskState.repose
-					task.runningEnd = new PDate
+					process.on('close', (code) => {
+						if (task.state == PTaskState.running) {
+							task.state = PTaskState.repose
+							task.runningEnd = new PDate
+							pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} finalizada (Exitcode ${code})` })
+						}
+					})
+
+					process.on('error', (error) => {
+						task.state = PTaskState.repose
+						task.runningEnd = new PDate
+						pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} finalizada con error`, body: error })
+					})
+
+					process.stdout.on('data', (data) => {
+						pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `STDOUT: ${data.toString().trim()}` })
+					})
+
+					process.stderr.on('data', (data) => {
+						pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `STDERR: ${data.toString().trim()}` })
+					})
+				} catch (error) {
 					pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} finalizada con error`, body: error })
-				})
-
-				process.stdout.on('data', (data) => {
-					pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `STDOUT: ${data.toString().trim()}` })
-				})
-
-				process.stderr.on('data', (data) => {
-					pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `STDERR: ${data.toString().trim()}` })
-				})
+				}
 			}
 		}
 	}
@@ -172,13 +184,13 @@ const onInterval = (pTaskExecutor: PTaskExecutor, execute: boolean) => {
 
 export class PTaskExecutor {
 	idTimer: ReturnType<typeof setInterval>
-	_tasks: Record<string, PTask>
-	_tasksReport: Record<string, PTaskReport>
+	_tasks: Record<string, PTask> = {}
+	_tasksReport: Record<string, PTaskReport> = {}
 	declare tasks: Record<string, PTaskSystem>
 	logger?: PLogger
 
 	constructor(params?: {
-		tasks: Record<string, PTask>
+		tasks: PTask[]
 		logger?: PLogger
 	}) {
 		this.tasks = new Proxy<Record<string, PTaskSystem>>({}, {
@@ -191,22 +203,40 @@ export class PTaskExecutor {
 					...this._tasks[property],
 					...this._tasksReport[property],
 				}
+			},
+			ownKeys: () => {
+				// Devolvemos las claves disponibles
+				return Reflect.ownKeys(this._tasks)
+			},
+			getOwnPropertyDescriptor: (target, property: string) => {
+				// Permitir que se enumeren las propiedades en el proxy
+				return {
+					configurable: true,
+					enumerable: true,
+					value: {
+						...this._tasks[property],
+						...this._tasksReport[property],
+					},
+				}
 			}
 		})
-		this._tasks = params?.tasks
+		if (params?.tasks?.length) this.add(...params.tasks)
 		this.logger = params?.logger
 	}
 
 	add(...tasks: PTask[]) {
 		for (const task of tasks) {
 			const id = task.id ?? crypto.randomUUID()
-			this._tasks[id] = { ...task }
+			this._tasks[id] = {
+				...task,
+				id,
+			}
 			this._tasksReport[id] = { state: PTaskState.repose }
 		}
 	}
 
 	start() {
-		/* Se crea el temporizador */
+		this.log.system({ label: 'TASK-EXECUTOR', description: 'Sistema iniciado' })
 		onInterval(this, false)
 	}
 
@@ -218,9 +248,9 @@ export class PTaskExecutor {
 		return {
 			info: (params: PLoggerLogParams) => this.logger?.info(params),
 			warning: (params: PLoggerLogParams) => this.logger?.warning(params),
-			error: (params: PLoggerLogParams) => this.logger?.info(params),
-			debug: (params: PLoggerLogParams) => this.logger?.info(params),
-			system: (params: PLoggerLogParams) => this.logger?.info(params),
+			error: (params: PLoggerLogParams) => this.logger?.error(params),
+			debug: (params: PLoggerLogParams) => this.logger?.debug(params),
+			system: (params: PLoggerLogParams) => this.logger?.system(params),
 		}
 	}
 }
