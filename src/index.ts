@@ -9,7 +9,7 @@ export type PTask = {
 	enabled?: boolean
 	schedule: PSchedule | PSchedule[]
 	command: string
-	arguments?: string[]
+	arguments?: string[] | string
 	workPath?: string
 }
 
@@ -148,7 +148,8 @@ const onInterval = (pTaskExecutor: PTaskExecutor, execute: boolean) => {
 				// })
 
 				try {
-					const process = spawn(task.command, task.arguments ?? [], {
+					const args = task.arguments instanceof Array ? task.arguments : task.arguments.match(/(?:[^\s"]+|"[^"]*")+/g).map(arg => arg.replace(/^"(.*)"$/, '$1'))
+					const process = spawn(task.command, args ?? [], {
 						cwd: task.workPath,
 						stdio: 'pipe',
 					})
