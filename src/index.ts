@@ -4,7 +4,12 @@ import { rules } from 'pols-validator'
 import { spawn } from 'child_process'
 import * as crypto from 'crypto'
 
-export type PTask = {
+export type PTaskParams = {
+	tasks: PTaskSystem[]
+	logger?: PLogger
+}
+
+export type PTaskDeclaration = {
 	id?: string
 	enabled?: boolean
 	schedule: PSchedule | PSchedule[]
@@ -13,14 +18,14 @@ export type PTask = {
 	workPath?: string
 }
 
-export type PTaskReport = {
+export type PTaskStatus = {
 	state: PTaskState
 	runningStart?: PDate
 	runningEnd?: PDate
 	duration?: number
 }
 
-export type PTaskSystem = PTask & PTaskReport
+export type PTaskSystem = PTaskDeclaration & PTaskStatus
 
 export type PSchedule = {
 	validity?: {
@@ -142,11 +147,6 @@ const onInterval = (pTaskExecutor: PTaskExecutor, execute: boolean) => {
 
 				pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} iniciada` })
 
-				// const process = spawn('cmd.exe', ['/c', 'npx'], {
-				// 	cwd: task.workPath,
-				// 	// stdio: 'inherit', // Hereda la entrada y salida estándar
-				// })
-
 				try {
 					const args = task.arguments instanceof Array ? task.arguments : task.arguments.match(/(?:[^\s"]+|"[^"]*")+/g).map(arg => arg.replace(/^"(.*)"$/, '$1'))
 					const process = spawn(task.command, args ?? [], {
@@ -185,55 +185,26 @@ const onInterval = (pTaskExecutor: PTaskExecutor, execute: boolean) => {
 
 export class PTaskExecutor {
 	idTimer: ReturnType<typeof setInterval>
-	_tasks: Record<string, PTask> = {}
-	_tasksReport: Record<string, PTaskReport> = {}
-	declare tasks: Record<string, PTaskSystem>
+	tasks: Record<string, PTaskSystem> = {}
 	logger?: PLogger
 
-	constructor(params?: {
-		tasks: PTask[]
-		logger?: PLogger
-	}) {
-		this.tasks = new Proxy<Record<string, PTaskSystem>>({}, {
-			set: (target, property: string, value: PTask) => {
-				this._tasks[property] = value
-				return true
-			},
-			get: (target, property: string) => {
-				return {
-					...this._tasks[property],
-					...this._tasksReport[property],
-				}
-			},
-			ownKeys: () => {
-				// Devolvemos las claves disponibles
-				return Reflect.ownKeys(this._tasks)
-			},
-			getOwnPropertyDescriptor: (target, property: string) => {
-				// Permitir que se enumeren las propiedades en el proxy
-				return {
-					configurable: true,
-					enumerable: true,
-					value: {
-						...this._tasks[property],
-						...this._tasksReport[property],
-					},
-				}
-			}
-		})
-		if (params?.tasks?.length) this.add(...params.tasks)
+	constructor(params?: PTaskParams) {
+		if (params?.tasks?.length) this.set(...params.tasks)
 		this.logger = params?.logger
 	}
 
-	add(...tasks: PTask[]) {
+	set(...tasks: PTaskDeclaration[]) {
+		const ids: string[] = []
 		for (const task of tasks) {
 			const id = task.id ?? crypto.randomUUID()
-			this._tasks[id] = {
+			this.tasks[id] = {
 				...task,
 				id,
+				state: PTaskState.repose
 			}
-			this._tasksReport[id] = { state: PTaskState.repose }
+			ids.push(id)
 		}
+		return ids
 	}
 
 	start() {
