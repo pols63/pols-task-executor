@@ -5,7 +5,7 @@ import * as crypto from 'crypto'
 import * as shellQuote from 'shell-quote'
 
 export type PTaskParams = {
-	tasks?: PTaskSystem[]
+	tasks?: PTaskDeclaration[]
 	logger?: PLogger
 }
 
