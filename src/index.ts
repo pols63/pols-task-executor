@@ -1,7 +1,8 @@
 import { PDate, PLogger, PLoggerLogParams } from "pols-utils"
 import { rules } from 'pols-validator'
-import { spawn } from 'child_process'
+import { spawn } from 'cross-spawn'
 import * as crypto from 'crypto'
+import * as shellQuote from 'shell-quote'
 
 export type PTaskParams = {
 	tasks?: PTaskSystem[]
@@ -12,7 +13,6 @@ export type PTaskDeclaration = {
 	id?: string
 	schedule: PSchedule | PSchedule[]
 	command: string
-	arguments?: string[] | string
 	workPath?: string
 }
 
@@ -144,8 +144,9 @@ const onInterval = (pTaskExecutor: PTaskExecutor, execute: boolean) => {
 				pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} iniciada` })
 
 				try {
-					const args = task.arguments instanceof Array ? task.arguments : task.arguments.match(/(?:[^\s"]+|"[^"]*")+/g).map(arg => arg.replace(/^"(.*)"$/, '$1'))
-					const process = spawn(task.command, args ?? [], {
+					// const args = task.arguments instanceof Array ? task.arguments : task.arguments.match(/(?:[^\s"]+|"[^"]*")+/g).map(arg => arg.replace(/^"(.*)"$/, '$1'))
+					const args = shellQuote.parse(task.command).filter(v => typeof v == 'string')
+					const process = spawn(args[0], args.slice(1), {
 						cwd: task.workPath,
 						stdio: 'pipe',
 					})

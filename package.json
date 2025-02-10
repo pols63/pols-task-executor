@@ -15,11 +15,13 @@
 	"devDependencies": {
 		"@eslint/js": "^9.13.0",
 		"@types/body-parser": "^1.19.5",
+		"@types/cross-spawn": "^6.0.6",
 		"@types/express": "^5.0.0",
 		"@types/express-fileupload": "^1.5.1",
 		"@types/jsonwebtoken": "^9.0.7",
 		"@types/mime-types": "^2.1.4",
 		"@types/node": "^22.7.9",
+		"@types/shell-quote": "^1.7.5",
 		"eslint": "^9.13.0",
 		"globals": "^15.11.0",
 		"tsconfig-paths": "^4.2.0",
@@ -27,7 +29,9 @@
 		"typescript-eslint": "^8.11.0"
 	},
 	"dependencies": {
+		"cross-spawn": "^7.0.6",
 		"pols-utils": "^1.6.7",
-		"pols-validator": "^2.1.1"
+		"pols-validator": "^2.1.1",
+		"shell-quote": "^1.8.2"
 	}
 }
