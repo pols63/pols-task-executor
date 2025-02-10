@@ -5,7 +5,7 @@ import { spawn } from 'child_process'
 import * as crypto from 'crypto'
 
 export type PTaskParams = {
-	tasks: PTaskSystem[]
+	tasks?: PTaskSystem[]
 	logger?: PLogger
 }
 
