@@ -27,7 +27,7 @@
 		"typescript-eslint": "^8.11.0"
 	},
 	"dependencies": {
-		"pols-utils": "^1.3.11",
+		"pols-utils": "^1.6.7",
 		"pols-validator": "^2.1.1"
 	}
 }

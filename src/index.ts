@@ -1,5 +1,4 @@
-import { PDate } from "pols-utils"
-import { PLogger, PLoggerLogParams } from "pols-utils/dist/plogger"
+import { PDate, PLogger, PLoggerLogParams } from "pols-utils"
 import { rules } from 'pols-validator'
 import { spawn } from 'child_process'
 import * as crypto from 'crypto'
@@ -11,7 +10,6 @@ export type PTaskParams = {
 
 export type PTaskDeclaration = {
 	id?: string
-	enabled?: boolean
 	schedule: PSchedule | PSchedule[]
 	command: string
 	arguments?: string[] | string
@@ -63,8 +61,6 @@ const onInterval = (pTaskExecutor: PTaskExecutor, execute: boolean) => {
 	if (execute) {
 		pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: 'Revisando tareas a ejecutar' })
 		for (const task of Object.values(pTaskExecutor.tasks)) {
-			if (task.enabled != null && !task.enabled) continue
-
 			if (!task.schedule) continue
 			const schedules = task.schedule instanceof Array ? task.schedule : [task.schedule]
 			if (!schedules.length) continue
