@@ -20,7 +20,7 @@ export type PTaskParams = {
 }
 
 export type PTaskSystem = PTaskDeclaration & {
-	state: PTaskState
+	status: PTaskStatuses
 	runningStart?: PDate
 	runningEnd?: PDate
 	duration?: number
@@ -44,13 +44,13 @@ export type PSchedule = {
 	endTime?: string
 })
 
-export enum PTaskState {
+export enum PTaskStatuses {
 	running = 'running',
 	repose = 'repose',
 }
 
 const finishTask = (task: PTaskSystem, error?: Error) => {
-	task.state = PTaskState.repose
+	task.status = PTaskStatuses.repose
 	task.runningEnd = new PDate
 	task.errorMessage = error.message
 }
@@ -146,7 +146,7 @@ const onInterval = (pTaskExecutor: PTaskExecutor, execute: boolean) => {
 			}
 
 			if (success) {
-				task.state = PTaskState.running
+				task.status = PTaskStatuses.running
 				task.runningStart = new PDate
 				task.runningEnd = null
 				task.errorMessage = null
@@ -163,7 +163,7 @@ const onInterval = (pTaskExecutor: PTaskExecutor, execute: boolean) => {
 					})
 
 					process.on('close', (code) => {
-						if (task.state == PTaskState.running) {
+						if (task.status == PTaskStatuses.running) {
 							finishTask(task)
 							pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} finalizada (Exitcode ${code})` })
 						}
@@ -188,7 +188,7 @@ const onInterval = (pTaskExecutor: PTaskExecutor, execute: boolean) => {
 						pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `STDERR: ${data.toString().trim()}` })
 					})
 				} catch (error) {
-					task.state = PTaskState.repose
+					task.status = PTaskStatuses.repose
 					task.runningEnd = new PDate
 					pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} finalizada con error`, body: error })
 				}
@@ -214,7 +214,7 @@ export class PTaskExecutor {
 			this.tasks[id] = {
 				...task,
 				id,
-				state: PTaskState.repose
+				status: PTaskStatuses.repose
 			}
 			ids.push(id)
 		}
