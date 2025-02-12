@@ -1,29 +1,31 @@
-import { PDate, PLogger, PLoggerLogParams } from "pols-utils"
 import { rules } from 'pols-validator'
 import { spawn } from 'cross-spawn'
 import * as crypto from 'crypto'
 import * as shellQuote from 'shell-quote'
-
-export type PTaskParams = {
-	tasks?: PTaskDeclaration[]
-	logger?: PLogger
-}
+import { PLogger, PLoggerLogParams } from 'pols-logger'
+import { PDate } from 'pols-date'
 
 export type PTaskDeclaration = {
 	id?: string
 	schedule: PSchedule | PSchedule[]
 	command: string
 	workPath?: string
+	onBeforeExecute?: () => void
+	onAfterExecute?: (error?: Error) => void
 }
 
-export type PTaskStatus = {
+export type PTaskParams = {
+	tasks?: PTaskDeclaration[]
+	logger?: PLogger
+}
+
+export type PTaskSystem = PTaskDeclaration & {
 	state: PTaskState
 	runningStart?: PDate
 	runningEnd?: PDate
 	duration?: number
+	errorMessage?: string
 }
-
-export type PTaskSystem = PTaskDeclaration & PTaskStatus
 
 export type PSchedule = {
 	validity?: {
@@ -45,6 +47,12 @@ export type PSchedule = {
 export enum PTaskState {
 	running = 'running',
 	repose = 'repose',
+}
+
+const finishTask = (task: PTaskSystem, error?: Error) => {
+	task.state = PTaskState.repose
+	task.runningEnd = new PDate
+	task.errorMessage = error.message
 }
 
 const onInterval = (pTaskExecutor: PTaskExecutor, execute: boolean) => {
@@ -140,11 +148,14 @@ const onInterval = (pTaskExecutor: PTaskExecutor, execute: boolean) => {
 			if (success) {
 				task.state = PTaskState.running
 				task.runningStart = new PDate
+				task.runningEnd = null
+				task.errorMessage = null
 
 				pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} iniciada` })
 
 				try {
-					// const args = task.arguments instanceof Array ? task.arguments : task.arguments.match(/(?:[^\s"]+|"[^"]*")+/g).map(arg => arg.replace(/^"(.*)"$/, '$1'))
+					task.onBeforeExecute?.()
+
 					const args = shellQuote.parse(task.command).filter(v => typeof v == 'string')
 					const process = spawn(args[0], args.slice(1), {
 						cwd: task.workPath,
@@ -153,15 +164,19 @@ const onInterval = (pTaskExecutor: PTaskExecutor, execute: boolean) => {
 
 					process.on('close', (code) => {
 						if (task.state == PTaskState.running) {
-							task.state = PTaskState.repose
-							task.runningEnd = new PDate
+							finishTask(task)
 							pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} finalizada (Exitcode ${code})` })
+						}
+						try {
+							task.onAfterExecute?.()
+						} catch (error) {
+							task.errorMessage = error
+							pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} dio error en el evento "onAfterExecute"`, body: error })
 						}
 					})
 
 					process.on('error', (error) => {
-						task.state = PTaskState.repose
-						task.runningEnd = new PDate
+						finishTask(task, error)
 						pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} finalizada con error`, body: error })
 					})
 
@@ -173,6 +188,8 @@ const onInterval = (pTaskExecutor: PTaskExecutor, execute: boolean) => {
 						pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `STDERR: ${data.toString().trim()}` })
 					})
 				} catch (error) {
+					task.state = PTaskState.repose
+					task.runningEnd = new PDate
 					pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} finalizada con error`, body: error })
 				}
 			}
