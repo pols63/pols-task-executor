@@ -5,13 +5,18 @@ import * as shellQuote from 'shell-quote'
 import { PLogger, PLoggerLogParams } from 'pols-logger'
 import { PDate } from 'pols-date'
 
+export enum PTypeOfExecution {
+	AUTOMATIC = 'AUTOMATIC',
+	MANUAL = 'MANUAL',
+}
+
 export type PTaskDeclaration = {
 	id?: string
 	schedule: PSchedule | PSchedule[]
 	command: string
 	workPath?: string
-	onBeforeExecute?: () => void
-	onAfterExecute?: (error?: Error) => void
+	onBeforeExecute?: ({ type }: { type: PTypeOfExecution }) => void
+	onAfterExecute?: ({ type, error }: { type: PTypeOfExecution, error?: Error }) => void
 }
 
 export type PTaskParams = {
@@ -55,6 +60,55 @@ const finishTask = (task: PTaskSystem, error?: Error) => {
 	task.errorMessage = error.message
 }
 
+const run = (pTaskExecutor: PTaskExecutor, task: PTaskSystem, typeOfExecution: PTypeOfExecution) => {
+	task.status = PTaskStatuses.running
+	task.runningStart = new PDate
+	task.runningEnd = null
+	task.errorMessage = null
+
+	pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} iniciada` })
+
+	try {
+		task.onBeforeExecute?.({ type: typeOfExecution })
+
+		const args = shellQuote.parse(task.command).filter(v => typeof v == 'string')
+		const process = spawn(args[0], args.slice(1), {
+			cwd: task.workPath,
+			stdio: 'pipe',
+		})
+
+		process.on('close', (code) => {
+			if (task.status == PTaskStatuses.running) {
+				finishTask(task)
+				pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} finalizada (Exitcode ${code})` })
+			}
+			try {
+				task.onAfterExecute?.({ type: typeOfExecution })
+			} catch (error) {
+				task.errorMessage = error
+				pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} dio error en el evento "onAfterExecute"`, body: error })
+			}
+		})
+
+		process.on('error', (error) => {
+			finishTask(task, error)
+			pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} finalizada con error`, body: error })
+		})
+
+		process.stdout.on('data', (data) => {
+			pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `STDOUT: ${data.toString().trim()}` })
+		})
+
+		process.stderr.on('data', (data) => {
+			pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `STDERR: ${data.toString().trim()}` })
+		})
+	} catch (error) {
+		task.status = PTaskStatuses.repose
+		task.runningEnd = new PDate
+		pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} finalizada con error`, body: error })
+	}
+}
+
 const onInterval = (pTaskExecutor: PTaskExecutor, execute: boolean) => {
 	const now = new PDate
 	const seconds = now.second
@@ -69,7 +123,7 @@ const onInterval = (pTaskExecutor: PTaskExecutor, execute: boolean) => {
 	if (execute) {
 		pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: 'Revisando tareas a ejecutar' })
 		for (const task of Object.values(pTaskExecutor.tasks)) {
-			if (!task.schedule) continue
+			if (task.status == PTaskStatuses.running || !task.schedule) continue
 			const schedules = task.schedule instanceof Array ? task.schedule : [task.schedule]
 			if (!schedules.length) continue
 
@@ -145,54 +199,7 @@ const onInterval = (pTaskExecutor: PTaskExecutor, execute: boolean) => {
 				success = true
 			}
 
-			if (success) {
-				task.status = PTaskStatuses.running
-				task.runningStart = new PDate
-				task.runningEnd = null
-				task.errorMessage = null
-
-				pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} iniciada` })
-
-				try {
-					task.onBeforeExecute?.()
-
-					const args = shellQuote.parse(task.command).filter(v => typeof v == 'string')
-					const process = spawn(args[0], args.slice(1), {
-						cwd: task.workPath,
-						stdio: 'pipe',
-					})
-
-					process.on('close', (code) => {
-						if (task.status == PTaskStatuses.running) {
-							finishTask(task)
-							pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} finalizada (Exitcode ${code})` })
-						}
-						try {
-							task.onAfterExecute?.()
-						} catch (error) {
-							task.errorMessage = error
-							pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} dio error en el evento "onAfterExecute"`, body: error })
-						}
-					})
-
-					process.on('error', (error) => {
-						finishTask(task, error)
-						pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} finalizada con error`, body: error })
-					})
-
-					process.stdout.on('data', (data) => {
-						pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `STDOUT: ${data.toString().trim()}` })
-					})
-
-					process.stderr.on('data', (data) => {
-						pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `STDERR: ${data.toString().trim()}` })
-					})
-				} catch (error) {
-					task.status = PTaskStatuses.repose
-					task.runningEnd = new PDate
-					pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} finalizada con error`, body: error })
-				}
-			}
+			if (success) run(pTaskExecutor, task, PTypeOfExecution.AUTOMATIC)
 		}
 	}
 }
@@ -228,6 +235,12 @@ export class PTaskExecutor {
 
 	stop() {
 		clearInterval(this.idTimer)
+	}
+
+	run(id: string) {
+		const task = this.tasks[id]
+		if (!task) throw new Error(`No existe tarea con id "${id}"`)
+		run(this, task, PTypeOfExecution.MANUAL)
 	}
 
 	get log() {
