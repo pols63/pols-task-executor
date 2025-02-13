@@ -15,8 +15,6 @@ export type PTaskDeclaration = {
 	schedule: PSchedule | PSchedule[]
 	command: string
 	workPath?: string
-	onBeforeExecute?: ({ type }: { type: PTypeOfExecution }) => void
-	onAfterExecute?: ({ type, error }: { type: PTypeOfExecution, error?: Error }) => void
 }
 
 export type PTaskParams = {
@@ -25,6 +23,7 @@ export type PTaskParams = {
 }
 
 export type PTaskSystem = PTaskDeclaration & {
+	id: string,
 	status: PTaskStatuses
 	runningStart?: PDate
 	runningEnd?: PDate
@@ -70,7 +69,7 @@ const run = (pTaskExecutor: PTaskExecutor, task: PTaskSystem, typeOfExecution: P
 	pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} iniciada` })
 
 	try {
-		task.onBeforeExecute?.({ type: typeOfExecution })
+		pTaskExecutor.onBeforeExecute?.({ task, type: typeOfExecution })
 
 		const args = shellQuote.parse(task.command).filter(v => typeof v == 'string')
 		const process = spawn(args[0], args.slice(1), {
@@ -84,7 +83,7 @@ const run = (pTaskExecutor: PTaskExecutor, task: PTaskSystem, typeOfExecution: P
 				pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} finalizada (Exitcode ${code})` })
 			}
 			try {
-				task.onAfterExecute?.({ type: typeOfExecution })
+				pTaskExecutor.onAfterExecute?.({ task, type: typeOfExecution })
 			} catch (error) {
 				task.errorMessage = error
 				pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} dio error en el evento "onAfterExecute"`, body: error })
@@ -210,6 +209,9 @@ export class PTaskExecutor {
 	tasks: Record<string, PTaskSystem> = {}
 	logger?: PLogger
 
+	declare onBeforeExecute?: ({ task, type }: { task: PTaskSystem, type: PTypeOfExecution }) => void
+	declare onAfterExecute?: ({ task, type, error }: { task: PTaskSystem, type: PTypeOfExecution, error?: Error }) => void
+
 	constructor(params?: PTaskParams) {
 		if (params?.tasks?.length) this.set(...params.tasks)
 		this.logger = params?.logger
@@ -219,7 +221,7 @@ export class PTaskExecutor {
 		const ids: string[] = []
 		for (const taskDeclaration of taskDeclarations) {
 			const id = taskDeclaration.id ?? crypto.randomUUID()
-			
+
 			const isNew = !this.tasks[id]
 
 			const task = this.tasks[id] ?? {
