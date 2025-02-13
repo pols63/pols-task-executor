@@ -30,6 +30,7 @@ export type PTaskSystem = PTaskDeclaration & {
 	runningEnd?: PDate
 	duration?: number
 	errorMessage?: string
+	process?: ReturnType<typeof spawn>
 }
 
 export type PSchedule = {
@@ -237,10 +238,21 @@ export class PTaskExecutor {
 		clearInterval(this.idTimer)
 	}
 
-	run(id: string) {
+	runTask(id: string) {
 		const task = this.tasks[id]
 		if (!task) throw new Error(`No existe tarea con id "${id}"`)
 		run(this, task, PTypeOfExecution.MANUAL)
+	}
+
+	stopTask(id: string): boolean {
+		const task = this.tasks[id]
+		if (!task) throw new Error(`No existe tarea con id "${id}"`)
+		if (task.status == PTaskStatuses.running) {
+			task.process?.kill()
+			return true
+		} else {
+			return false
+		}
 	}
 
 	get log() {
