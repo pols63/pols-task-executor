@@ -215,14 +215,25 @@ export class PTaskExecutor {
 		this.logger = params?.logger
 	}
 
-	set(...tasks: PTaskDeclaration[]) {
+	set(...taskDeclarations: PTaskDeclaration[]) {
 		const ids: string[] = []
-		for (const task of tasks) {
-			const id = task.id ?? crypto.randomUUID()
-			this.tasks[id] = {
-				...task,
+		for (const taskDeclaration of taskDeclarations) {
+			const id = taskDeclaration.id ?? crypto.randomUUID()
+			
+			const isNew = !this.tasks[id]
+
+			const task = this.tasks[id] ?? {
+				...taskDeclaration,
 				id,
 				status: PTaskStatuses.repose
+			} as PTaskSystem
+
+			this.tasks[id] = task
+
+			if (isNew && task.status == PTaskStatuses.repose) {
+				task.runningStart = null
+				task.runningEnd = null
+				task.duration = null
 			}
 			ids.push(id)
 		}
@@ -236,6 +247,12 @@ export class PTaskExecutor {
 
 	stop() {
 		clearInterval(this.idTimer)
+	}
+
+	removeTask(id: string) {
+		if (!this.tasks[id]) return false
+		delete this.tasks[id]
+		return true
 	}
 
 	runTask(id: string) {
