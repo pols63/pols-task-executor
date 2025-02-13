@@ -168,7 +168,7 @@ const onInterval = (pTaskExecutor: PTaskExecutor, execute: boolean) => {
 				if (schedule.days?.length && !schedule.days.includes(now.day)) continue
 				if (schedule.weekDays?.length && !schedule.weekDays.includes(now.weekDay)) continue
 
-				if ('every' in schedule) {
+				if ('every' in schedule && schedule.every) {
 					/* Ejecución del programa a cada cantidad de minutos */
 
 					/* Se definen las horas de inicio y fin y se valida si se encuentra en el rango */
@@ -190,7 +190,7 @@ const onInterval = (pTaskExecutor: PTaskExecutor, execute: boolean) => {
 
 					/* Verifica si, de acuerdo a la cantidad indicada en every, la tarea se debe ejecutar */
 					if (now.minutesDifference(startTime) % schedule.every != 0) continue
-				} else if ('minutes' in schedule || 'hours' in schedule) {
+				} else if (('minutes' in schedule && schedule.minutes?.length) || ('hours' in schedule && schedule.hours?.length)) {
 					if (schedule.hours?.length && !schedule.hours.includes(now.hour)) continue
 					if (schedule.minutes?.length && !schedule.minutes.includes(now.minute)) continue
 				} else {
