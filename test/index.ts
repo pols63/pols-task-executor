@@ -11,8 +11,8 @@ const taskExecutor = new PTaskExecutor({
 	// 	workPath: path.join(__dirname, '..'),
 	// }, {
 		schedule: {
-			hours: [16],
-			minutes: [59]
+			hours: [17],
+			minutes: [5,6]
 		},
 		command: 'powershell.exe -Command npx ts-node-dev -r tsconfig-paths/register --project tsconfig.json "test/task2.ts"',
 		workPath: path.join(__dirname, '..'),

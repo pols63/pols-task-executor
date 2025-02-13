@@ -65,6 +65,7 @@ const run = (pTaskExecutor: PTaskExecutor, task: PTaskSystem, typeOfExecution: P
 	task.runningStart = new PDate
 	task.runningEnd = null
 	task.errorMessage = null
+	task.process = null
 
 	pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} iniciada` })
 
@@ -76,6 +77,7 @@ const run = (pTaskExecutor: PTaskExecutor, task: PTaskSystem, typeOfExecution: P
 			cwd: task.workPath,
 			stdio: 'pipe',
 		})
+		task.process = process
 
 		process.on('close', (code) => {
 			if (task.status == PTaskStatuses.running) {
@@ -229,6 +231,9 @@ export class PTaskExecutor {
 				id,
 				status: PTaskStatuses.repose
 			} as PTaskSystem
+			task.command = taskDeclaration.command
+			task.workPath = taskDeclaration.workPath
+			task.schedule = taskDeclaration.schedule
 
 			this.tasks[id] = task
 
@@ -236,6 +241,8 @@ export class PTaskExecutor {
 				task.runningStart = null
 				task.runningEnd = null
 				task.duration = null
+				task.errorMessage = null
+				task.process = null
 			}
 			ids.push(id)
 		}
