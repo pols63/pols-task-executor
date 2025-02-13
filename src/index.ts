@@ -57,7 +57,7 @@ export enum PTaskStatuses {
 const finishTask = (task: PTaskSystem, error?: Error) => {
 	task.status = PTaskStatuses.repose
 	task.runningEnd = new PDate
-	task.errorMessage = error.message
+	task.errorMessage = error?.message
 }
 
 const run = (pTaskExecutor: PTaskExecutor, task: PTaskSystem, typeOfExecution: PTypeOfExecution) => {
