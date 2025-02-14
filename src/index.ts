@@ -266,8 +266,9 @@ export class PTaskExecutor {
 
 	runTask(id: string) {
 		const task = this.tasks[id]
-		if (!task) throw new Error(`No existe tarea con id "${id}"`)
+		if (!task) return false
 		run(this, task, PTypeOfExecution.MANUAL)
+		return true
 	}
 
 	stopTask(id: string): boolean {
