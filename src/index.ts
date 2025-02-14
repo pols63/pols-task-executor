@@ -101,7 +101,7 @@ const run = (pTaskExecutor: PTaskExecutor, task: PTaskSystem, typeOfExecution: P
 			pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `STDOUT: ${data.toString().trim()}` })
 		})
 
-		process.stderr.on('data', (data) => task.stderr.push(data))
+		process.stderr.on('data', (data) => task.stderr.push(data.toString()))
 	} catch (error) {
 		task.status = PTaskStatuses.repose
 		task.runningEnd = new PDate
