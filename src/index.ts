@@ -10,6 +10,11 @@ export enum PTypeOfExecution {
 	MANUAL = 'MANUAL',
 }
 
+export enum PTaskExecutorStatuses {
+	RUNNING = 'RUNNING',
+	STOPPED = 'STOPPED'
+}
+
 export type PTaskDeclaration = {
 	id?: string
 	schedule: PSchedule | PSchedule[]
@@ -50,17 +55,17 @@ export type PSchedule = {
 })
 
 export enum PTaskStatuses {
-	running = 'running',
-	repose = 'repose',
+	RUNNING = 'RUNNING',
+	REPOSE = 'REPOSE',
 }
 
 const finishTask = (task: PTaskSystem) => {
-	task.status = PTaskStatuses.repose
+	task.status = PTaskStatuses.REPOSE
 	task.runningEnd = new PDate
 }
 
 const run = (pTaskExecutor: PTaskExecutor, task: PTaskSystem, typeOfExecution: PTypeOfExecution) => {
-	task.status = PTaskStatuses.running
+	task.status = PTaskStatuses.RUNNING
 	task.runningStart = new PDate
 	task.runningEnd = null
 	task.stderr = []
@@ -79,7 +84,7 @@ const run = (pTaskExecutor: PTaskExecutor, task: PTaskSystem, typeOfExecution: P
 		task.process = process
 
 		process.on('close', (code) => {
-			if (task.status == PTaskStatuses.running) {
+			if (task.status == PTaskStatuses.RUNNING) {
 				finishTask(task)
 				pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} finalizada (Exitcode ${code})` })
 			}
@@ -103,7 +108,7 @@ const run = (pTaskExecutor: PTaskExecutor, task: PTaskSystem, typeOfExecution: P
 
 		process.stderr.on('data', (data) => task.stderr.push(data.toString()))
 	} catch (error) {
-		task.status = PTaskStatuses.repose
+		task.status = PTaskStatuses.REPOSE
 		task.runningEnd = new PDate
 		pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} finalizada con error`, body: error })
 	}
@@ -123,7 +128,7 @@ const onInterval = (pTaskExecutor: PTaskExecutor, execute: boolean) => {
 	if (execute) {
 		pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: 'Revisando tareas a ejecutar' })
 		for (const task of Object.values(pTaskExecutor.tasks)) {
-			if (task.status == PTaskStatuses.running || !task.schedule) continue
+			if (task.status == PTaskStatuses.RUNNING || !task.schedule) continue
 			const schedules = task.schedule instanceof Array ? task.schedule : [task.schedule]
 			if (!schedules.length) continue
 
@@ -209,6 +214,14 @@ export class PTaskExecutor {
 	tasks: Record<string, PTaskSystem> = {}
 	logger?: PLogger
 
+	get status() {
+		if (this.idTimer != null) {
+			return PTaskExecutorStatuses.RUNNING
+		} else {
+			return PTaskExecutorStatuses.STOPPED
+		}
+	}
+
 	onBeforeExecute?({ task, type }: { task: PTaskSystem, type: PTypeOfExecution }): void
 	onAfterExecute?({ task, type, code, error }: { task: PTaskSystem, type: PTypeOfExecution, code: number, error: boolean }): void
 
@@ -227,7 +240,7 @@ export class PTaskExecutor {
 			const task = this.tasks[id] ?? {
 				...taskDeclaration,
 				id,
-				status: PTaskStatuses.repose
+				status: PTaskStatuses.REPOSE
 			} as PTaskSystem
 			task.command = taskDeclaration.command
 			task.workPath = taskDeclaration.workPath
@@ -235,7 +248,7 @@ export class PTaskExecutor {
 
 			this.tasks[id] = task
 
-			if (isNew && task.status == PTaskStatuses.repose) {
+			if (isNew && task.status == PTaskStatuses.REPOSE) {
 				task.runningStart = null
 				task.runningEnd = null
 				task.duration = null
@@ -254,6 +267,7 @@ export class PTaskExecutor {
 
 	stop() {
 		clearInterval(this.idTimer)
+		this.idTimer = null
 	}
 
 	removeTask(id: string) {
@@ -272,7 +286,7 @@ export class PTaskExecutor {
 	stopTask(id: string): boolean {
 		const task = this.tasks[id]
 		if (!task) throw new Error(`No existe tarea con id "${id}"`)
-		if (task.status == PTaskStatuses.running) {
+		if (task.status == PTaskStatuses.RUNNING) {
 			task.process?.kill()
 			return true
 		} else {
