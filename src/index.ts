@@ -94,7 +94,6 @@ const run = (pTaskExecutor: PTaskExecutor, task: PTaskSystem, typeOfExecution: P
 			try {
 				pTaskExecutor.onAfterExecute?.({ task, type: typeOfExecution, code, error: code != 0 })
 			} catch (error) {
-				pTaskExecutor.onStd?.({ task, type: PStdType.ERROR, data: error.message + '\n' + error.stack })
 				pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} dio error en el evento "onAfterExecute"`, body: error })
 			}
 		})
