@@ -5,6 +5,11 @@ import * as shellQuote from 'shell-quote'
 import { PLogger, PLoggerLogParams } from 'pols-logger'
 import { PDate } from 'pols-date'
 
+export enum PStdType {
+	OUT = 'OUT',
+	ERROR = 'ERROR'
+}
+
 export enum PTypeOfExecution {
 	AUTOMATIC = 'AUTOMATIC',
 	MANUAL = 'MANUAL',
@@ -33,7 +38,6 @@ export type PTaskSystem = PTaskDeclaration & {
 	runningStart?: PDate
 	runningEnd?: PDate
 	duration?: number
-	stderr?: string[]
 	process?: ReturnType<typeof spawn>
 }
 
@@ -68,7 +72,6 @@ const run = (pTaskExecutor: PTaskExecutor, task: PTaskSystem, typeOfExecution: P
 	task.status = PTaskStatuses.RUNNING
 	task.runningStart = new PDate
 	task.runningEnd = null
-	task.stderr = []
 	task.process = null
 
 	pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} iniciada` })
@@ -91,22 +94,24 @@ const run = (pTaskExecutor: PTaskExecutor, task: PTaskSystem, typeOfExecution: P
 			try {
 				pTaskExecutor.onAfterExecute?.({ task, type: typeOfExecution, code, error: code != 0 })
 			} catch (error) {
-				task.stderr.push(error.message)
+				pTaskExecutor.onStd?.({ task, type: PStdType.ERROR, data: error.message + '\n' + error.stack })
 				pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} dio error en el evento "onAfterExecute"`, body: error })
 			}
 		})
 
 		process.on('error', (error) => {
-			task.stderr.push(error.message)
+			pTaskExecutor.onStd?.({ task, type: PStdType.ERROR, data: error.message + '\n' + error.stack })
 			finishTask(task)
 			pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} finalizada con error`, body: error })
 		})
 
 		process.stdout.on('data', (data) => {
-			pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `STDOUT: ${data.toString().trim()}` })
+			pTaskExecutor.onStd?.({ task, type: PStdType.OUT, data: data.toString().trim() })
 		})
 
-		process.stderr.on('data', (data) => task.stderr.push(data.toString()))
+		process.stderr.on('data', (data) => {
+			pTaskExecutor.onStd?.({ task, type: PStdType.ERROR, data: data.toString().trim() })
+		})
 	} catch (error) {
 		task.status = PTaskStatuses.REPOSE
 		task.runningEnd = new PDate
@@ -224,6 +229,7 @@ export class PTaskExecutor {
 
 	onBeforeExecute?({ task, type }: { task: PTaskSystem, type: PTypeOfExecution }): void
 	onAfterExecute?({ task, type, code, error }: { task: PTaskSystem, type: PTypeOfExecution, code: number, error: boolean }): void
+	onStd?({ task, type, data }: { task: PTaskSystem, type: PStdType, data: string }): void
 
 	constructor(params?: PTaskParams) {
 		if (params?.tasks?.length) this.set(...params.tasks)
@@ -252,7 +258,6 @@ export class PTaskExecutor {
 				task.runningStart = null
 				task.runningEnd = null
 				task.duration = null
-				task.stderr = null
 				task.process = null
 			}
 			ids.push(id)
