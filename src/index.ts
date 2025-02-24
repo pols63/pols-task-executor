@@ -90,13 +90,13 @@ const run = (pTaskExecutor: PTaskExecutor, task: PTaskSystem, typeOfExecution: P
 
 		task.process = process
 
-		process.on('close', (code) => {
+		process.on('close', (code, signal) => {
 			if (task.status == PTaskStatuses.RUNNING) {
 				finishTask(task)
 				pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} finalizada (Exitcode ${code})` })
 			}
 			try {
-				pTaskExecutor.onAfterExecute?.({ task, type: typeOfExecution, code, error: code != 0, killed: false })
+				pTaskExecutor.onAfterExecute?.({ task, type: typeOfExecution, code, error: code != 0, signal })
 			} catch (error) {
 				pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} dio error en el evento "onAfterExecute"`, body: error })
 			}
@@ -233,7 +233,7 @@ export class PTaskExecutor {
 	}
 
 	onBeforeExecute?({ task, type }: { task: PTaskSystem, type: PTypeOfExecution }): void
-	onAfterExecute?({ task, type, code, error, killed }: { task: PTaskSystem, type: PTypeOfExecution, code: number, error: boolean, killed: boolean }): void
+	onAfterExecute?({ task, type, code, error, signal }: { task: PTaskSystem, type: PTypeOfExecution, code: number, error: boolean, signal: NodeJS.Signals }): void
 	onStd?({ task, type, data }: { task: PTaskSystem, type: PStdType, data: string }): void
 
 	constructor(params?: PTaskParams) {
