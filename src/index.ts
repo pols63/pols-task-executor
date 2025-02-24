@@ -4,6 +4,7 @@ import * as crypto from 'crypto'
 import * as shellQuote from 'shell-quote'
 import { PLogger, PLoggerLogParams } from 'pols-logger'
 import { PDate } from 'pols-date'
+import os from 'os'
 
 export enum PStdType {
 	OUT = 'OUT',
@@ -68,6 +69,8 @@ const finishTask = (task: PTaskSystem) => {
 	task.runningEnd = new PDate
 }
 
+const killMethods: Record<string, () => void> = {}
+
 const run = (pTaskExecutor: PTaskExecutor, task: PTaskSystem, typeOfExecution: PTypeOfExecution) => {
 	task.status = PTaskStatuses.RUNNING
 	task.runningStart = new PDate
@@ -84,6 +87,7 @@ const run = (pTaskExecutor: PTaskExecutor, task: PTaskSystem, typeOfExecution: P
 			cwd: task.workPath,
 			stdio: 'pipe',
 		})
+
 		task.process = process
 
 		process.on('close', (code) => {
@@ -96,6 +100,8 @@ const run = (pTaskExecutor: PTaskExecutor, task: PTaskSystem, typeOfExecution: P
 			} catch (error) {
 				pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} dio error en el evento "onAfterExecute"`, body: error })
 			}
+			killMethods[task.id]?.()
+			delete killMethods[task.id]
 		})
 
 		process.on('error', (error) => {
@@ -288,16 +294,29 @@ export class PTaskExecutor {
 		return true
 	}
 
-	stopTask(id: string): boolean {
-		const task = this.tasks[id]
-		if (!task) throw new Error(`No existe tarea con id "${id}"`)
-		if (task.status == PTaskStatuses.RUNNING) {
-			task.process?.kill()
-			this.onAfterExecute?.({ task, killed: true, type: PTypeOfExecution.MANUAL, error: false, code: null })
-			return true
-		} else {
-			return false
-		}
+	stopTask(id: string): Promise<boolean> {
+		return new Promise((resolve) => {
+			const task = this.tasks[id]
+			if (!task) throw new Error(`No existe tarea con id "${id}"`)
+			if (task.status == PTaskStatuses.RUNNING && task.process?.pid) {
+				let proc: ReturnType<typeof spawn>
+				switch (os.platform()) {
+					case 'win32':
+						proc = spawn('taskkill', ['/F', '/T', '/PID', task.process.pid.toString()])
+						break
+					default:
+						proc = spawn('pkill', ['-TERM', '-P', task.process.pid.toString()])
+						break
+				}
+				proc.on('close', () => {
+					killMethods[id] = () => {
+						resolve(true)
+					}
+				})
+			} else {
+				resolve(false)
+			}
+		})
 	}
 
 	get log() {
