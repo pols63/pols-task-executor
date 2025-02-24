@@ -282,7 +282,7 @@ export class PTaskExecutor {
 
 	runTask(id: string) {
 		const task = this.tasks[id]
-		if (!task) return false
+		if (!task || task.status == PTaskStatuses.RUNNING) return false
 		run(this, task, PTypeOfExecution.MANUAL)
 		return true
 	}
