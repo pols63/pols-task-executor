@@ -301,20 +301,17 @@ export class PTaskExecutor {
 			const task = this.tasks[id]
 			if (!task) throw new Error(`No existe tarea con id "${id}"`)
 			if (task.status == PTaskStatuses.RUNNING && task.process?.pid) {
-				let proc: ReturnType<typeof spawn>
+				killMethods[id] = () => {
+					resolve(true)
+				}
 				switch (os.platform()) {
 					case 'win32':
-						proc = spawn('taskkill', ['/F', '/T', '/PID', task.process.pid.toString()])
+						spawn('taskkill', ['/F', '/T', '/PID', task.process.pid.toString()])
 						break
 					default:
-						proc = spawn('pkill', ['-TERM', '-P', task.process.pid.toString()])
+						spawn('pkill', ['-TERM', '-P', task.process.pid.toString()])
 						break
 				}
-				proc.on('close', () => {
-					killMethods[id] = () => {
-						resolve(true)
-					}
-				})
 			} else {
 				resolve(false)
 			}
