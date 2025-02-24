@@ -92,7 +92,7 @@ const run = (pTaskExecutor: PTaskExecutor, task: PTaskSystem, typeOfExecution: P
 				pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} finalizada (Exitcode ${code})` })
 			}
 			try {
-				pTaskExecutor.onAfterExecute?.({ task, type: typeOfExecution, code, error: code != 0 })
+				pTaskExecutor.onAfterExecute?.({ task, type: typeOfExecution, code, error: code != 0, killed: false })
 			} catch (error) {
 				pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} dio error en el evento "onAfterExecute"`, body: error })
 			}
@@ -227,7 +227,7 @@ export class PTaskExecutor {
 	}
 
 	onBeforeExecute?({ task, type }: { task: PTaskSystem, type: PTypeOfExecution }): void
-	onAfterExecute?({ task, type, code, error }: { task: PTaskSystem, type: PTypeOfExecution, code: number, error: boolean }): void
+	onAfterExecute?({ task, type, code, error, killed }: { task: PTaskSystem, type: PTypeOfExecution, code: number, error: boolean, killed: boolean }): void
 	onStd?({ task, type, data }: { task: PTaskSystem, type: PStdType, data: string }): void
 
 	constructor(params?: PTaskParams) {
@@ -282,7 +282,8 @@ export class PTaskExecutor {
 
 	runTask(id: string) {
 		const task = this.tasks[id]
-		if (!task || task.status == PTaskStatuses.RUNNING) return false
+		if (!task) throw new Error(`No existe tarea con id "${id}"`)
+		if (task.status == PTaskStatuses.RUNNING) return false
 		run(this, task, PTypeOfExecution.MANUAL)
 		return true
 	}
@@ -292,6 +293,7 @@ export class PTaskExecutor {
 		if (!task) throw new Error(`No existe tarea con id "${id}"`)
 		if (task.status == PTaskStatuses.RUNNING) {
 			task.process?.kill()
+			this.onAfterExecute?.({ task, killed: true, type: PTypeOfExecution.MANUAL, error: false, code: null })
 			return true
 		} else {
 			return false
