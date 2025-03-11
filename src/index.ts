@@ -129,8 +129,7 @@ const run = (pTaskExecutor: PTaskExecutor, task: PTaskSystem, typeOfExecution: P
 const onInterval = (pTaskExecutor: PTaskExecutor, execute: boolean) => {
 	const now = new PDate
 
-	const interval = 1000 * (60 - now.second) - now.millisecond + 1
-	console.log(now.toString(), now.millisecond, interval)
+	const interval = 1000 * (60 - now.second) - now.millisecond + 500
 
 	/* Define el temporizador para que se ejecute en el segundo cero del siguiente minuto */
 	pTaskExecutor.idTimer = setTimeout(
