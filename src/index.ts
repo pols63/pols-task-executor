@@ -128,96 +128,97 @@ const run = (pTaskExecutor: PTaskExecutor, task: PTaskSystem, typeOfExecution: P
 
 const onInterval = (pTaskExecutor: PTaskExecutor, execute: boolean) => {
 	const now = new PDate
-	const seconds = now.second
-	const milliSeconds = now.millisecond
+
+	const interval = 1000 * (60 - now.second) - now.millisecond + 1
+	console.log(now.toString(), now.millisecond, interval)
 
 	/* Define el temporizador para que se ejecute en el segundo cero del siguiente minuto */
 	pTaskExecutor.idTimer = setTimeout(
 		() => onInterval(pTaskExecutor, true),
-		1000 * (60 - seconds) - milliSeconds
+		interval
 	)
 
-	if (execute) {
-		pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: 'Revisando tareas a ejecutar' })
-		for (const task of Object.values(pTaskExecutor.tasks)) {
-			if (task.status == PTaskStatuses.RUNNING || !task.schedule) continue
-			const schedules = task.schedule instanceof Array ? task.schedule : [task.schedule]
-			if (!schedules.length) continue
+	if (!execute) return
 
-			let success = false
-			for (let [i, schedule] of schedules.entries()) {
-				if (!schedule) continue
+	pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: 'Revisando tareas a ejecutar' })
+	for (const task of Object.values(pTaskExecutor.tasks)) {
+		if (task.status == PTaskStatuses.RUNNING || !task.schedule) continue
+		const schedules = task.schedule instanceof Array ? task.schedule : [task.schedule]
+		if (!schedules.length) continue
 
-				const validationResult = rules({ label: 'schedule', required: true }).isObject({
-					validity: rules().isObject({
-						starDate: rules().isTime(),
-						endDate: rules().isTime(),
-					}),
-					weekDays: rules().isArray(i => rules({ label: `Elemento ${i}` }).floor().gte(0).lte(6)),
-					days: rules().isArray(i => rules({ label: `Elemento ${i}` }).floor().gte(1).lte(31)),
-					months: rules().isArray(i => rules({ label: `Elemento ${i}` }).floor().gte(1).lte(12)),
-					minutes: rules().isArray(i => rules({ label: `Elemento ${i}` }).floor().gte(0).lte(59)),
-					hours: rules().isArray(i => rules({ label: `Elemento ${i}` }).floor().gte(0).lte(23)),
-					every: rules().floor().gt(0),
-					startTime: rules().isTime(),
-					endTime: rules().isTime(),
-				}).validate<PSchedule>(schedule)
-				if (validationResult.error == true) {
-					pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `La propiedad 'schedule' del elemento '${i}' no tiene un formato de programación correcta`, body: validationResult.messages })
-					continue
-				}
-				schedule = validationResult.result
+		let success = false
+		for (let [i, schedule] of schedules.entries()) {
+			if (!schedule) continue
 
-				/* Se verifica la vigencia de la programación */
-				const startDateValue = schedule.validity?.startDate
-				if (startDateValue) {
-					const startDate = new PDate(startDateValue)
-					if (startDate.isInvalidDate || startDate.time > now.time) continue
-				}
-				const endDateValue = schedule.validity?.endDate
-				if (endDateValue) {
-					const endDate = new PDate(endDateValue)
-					if (endDate.isInvalidDate || endDate.time < now.time) continue
-				}
+			const validationResult = rules({ label: 'schedule', required: true }).isObject({
+				validity: rules().isObject({
+					starDate: rules().isTime(),
+					endDate: rules().isTime(),
+				}),
+				weekDays: rules().isArray(i => rules({ label: `Elemento ${i}` }).floor().gte(0).lte(6)),
+				days: rules().isArray(i => rules({ label: `Elemento ${i}` }).floor().gte(1).lte(31)),
+				months: rules().isArray(i => rules({ label: `Elemento ${i}` }).floor().gte(1).lte(12)),
+				minutes: rules().isArray(i => rules({ label: `Elemento ${i}` }).floor().gte(0).lte(59)),
+				hours: rules().isArray(i => rules({ label: `Elemento ${i}` }).floor().gte(0).lte(23)),
+				every: rules().floor().gt(0),
+				startTime: rules().isTime(),
+				endTime: rules().isTime(),
+			}).validate<PSchedule>(schedule)
+			if (validationResult.error == true) {
+				pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `La propiedad 'schedule' del elemento '${i}' no tiene un formato de programación correcta`, body: validationResult.messages })
+				continue
+			}
+			schedule = validationResult.result
 
-				/* Se valida si se encuentra dentro del mes y días indicados */
-				if (schedule.months?.length && !schedule.months.includes(now.month)) continue
-				if (schedule.days?.length && !schedule.days.includes(now.day)) continue
-				if (schedule.weekDays?.length && !schedule.weekDays.includes(now.weekDay)) continue
-
-				if ('every' in schedule && schedule.every) {
-					/* Ejecución del programa a cada cantidad de minutos */
-
-					/* Se definen las horas de inicio y fin y se valida si se encuentra en el rango */
-					const startTime = new PDate().setTime(schedule.startTime ?? '00:00:00')
-					if (startTime.isInvalidDate || now.time < startTime.time) continue
-
-					const endTime = startTime.clone().clearTime()
-					if (schedule.endTime) {
-						endTime.setTime(schedule.endTime)
-					} else {
-						endTime.addDay(1)
-					}
-					if (endTime.isInvalidDate || now.time > endTime.time) continue
-
-					if (startTime.time > endTime.time) {
-						pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `La propiedad 'startTime' del elemento '${i}' no puede ser posterior a 'endTime'` })
-						continue
-					}
-
-					/* Verifica si, de acuerdo a la cantidad indicada en every, la tarea se debe ejecutar */
-					if (now.minutesDifference(startTime) % schedule.every != 0) continue
-				} else if (('minutes' in schedule && schedule.minutes?.length) || ('hours' in schedule && schedule.hours?.length)) {
-					if (schedule.hours?.length && !schedule.hours.includes(now.hour)) continue
-					if (schedule.minutes?.length && !schedule.minutes.includes(now.minute)) continue
-				} else {
-					continue
-				}
-				success = true
+			/* Se verifica la vigencia de la programación */
+			const startDateValue = schedule.validity?.startDate
+			if (startDateValue) {
+				const startDate = new PDate(startDateValue)
+				if (startDate.isInvalidDate || startDate.timestamp > now.timestamp) continue
+			}
+			const endDateValue = schedule.validity?.endDate
+			if (endDateValue) {
+				const endDate = new PDate(endDateValue)
+				if (endDate.isInvalidDate || endDate.timestamp < now.timestamp) continue
 			}
 
-			if (success) run(pTaskExecutor, task, PTypeOfExecution.AUTOMATIC)
+			/* Se valida si se encuentra dentro del mes y días indicados */
+			if (schedule.months?.length && !schedule.months.includes(now.month)) continue
+			if (schedule.days?.length && !schedule.days.includes(now.day)) continue
+			if (schedule.weekDays?.length && !schedule.weekDays.includes(now.weekDay)) continue
+
+			if ('every' in schedule && schedule.every) {
+				/* Ejecución del programa a cada cantidad de minutos */
+
+				/* Se definen las horas de inicio y fin y se valida si se encuentra en el rango */
+				const startTime = new PDate().setClockTime(schedule.startTime ?? '00:00:00')
+				if (startTime.isInvalidDate || now.timestamp < startTime.timestamp) continue
+
+				const endTime = startTime.clone().clearClockTime()
+				if (schedule.endTime) {
+					endTime.setClockTime(schedule.endTime)
+				} else {
+					endTime.addDay(1)
+				}
+				if (endTime.isInvalidDate || now.timestamp > endTime.timestamp) continue
+
+				if (startTime.timestamp > endTime.timestamp) {
+					pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `La propiedad 'startTime' del elemento '${i}' no puede ser posterior a 'endTime'` })
+					continue
+				}
+
+				/* Verifica si, de acuerdo a la cantidad indicada en every, la tarea se debe ejecutar */
+				if (now.minutesDifference(startTime) % schedule.every != 0) continue
+			} else if (('minutes' in schedule && schedule.minutes?.length) || ('hours' in schedule && schedule.hours?.length)) {
+				if (schedule.hours?.length && !schedule.hours.includes(now.hour)) continue
+				if (schedule.minutes?.length && !schedule.minutes.includes(now.minute)) continue
+			} else {
+				continue
+			}
+			success = true
 		}
+
+		if (success) run(pTaskExecutor, task, PTypeOfExecution.AUTOMATIC)
 	}
 }
 
