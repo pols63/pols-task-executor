@@ -33,7 +33,7 @@
 		"pols-date": "^1.2.2",
 		"pols-logger": "^1.0.0",
 		"pols-utils": "^4.1.2",
-		"pols-validator": "^2.3.4",
+		"pols-validator": "^2.3.5",
 		"shell-quote": "^1.8.2"
 	}
 }
