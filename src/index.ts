@@ -174,7 +174,7 @@ const onInterval = (pTaskExecutor: PTaskExecutor, execute: boolean) => {
 				endTime: rules().isTime(),
 			}).validate<PSchedule>(schedule)
 			if (validationResult.error == true) {
-				pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `La propiedad 'schedule' del elemento '${i}' (ID ${task.id}) no tiene un formato de programación correcta`, body: validationResult.messages })
+				pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `La propiedad 'schedule' del elemento '${i}' (ID ${task.id}) no tiene un formato de programación correcta: ${validationResult.messages}`, body: validationResult.messages })
 				continue
 			}
 			schedule = validationResult.result
