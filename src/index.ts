@@ -151,8 +151,8 @@ const onInterval = (pTaskExecutor: PTaskExecutor, execute: boolean) => {
 
 			const validationResult = rules({ label: 'schedule', required: true }).isObject({
 				validity: rules().isObject({
-					starDate: rules().isTime(),
-					endDate: rules().isTime(),
+					starDate: rules().isDate(),
+					endDate: rules().isDate(),
 				}),
 				weekDays: rules().isArray(i => rules({ label: `Elemento ${i}` }).floor().gte(0).lte(6)),
 				days: rules().isArray(i => rules({ label: `Elemento ${i}` }).floor().gte(1).lte(31)),
@@ -164,7 +164,7 @@ const onInterval = (pTaskExecutor: PTaskExecutor, execute: boolean) => {
 				endTime: rules().isTime(),
 			}).validate<PSchedule>(schedule)
 			if (validationResult.error == true) {
-				pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `La propiedad 'schedule' del elemento '${i}' no tiene un formato de programación correcta`, body: validationResult.messages })
+				pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `La propiedad 'schedule' del elemento '${i}' (ID ${task.id}) no tiene un formato de programación correcta`, body: validationResult.messages })
 				continue
 			}
 			schedule = validationResult.result

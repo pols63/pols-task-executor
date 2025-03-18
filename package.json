@@ -30,9 +30,9 @@
 	},
 	"dependencies": {
 		"cross-spawn": "^7.0.6",
-		"pols-date": "^1.1.0",
+		"pols-date": "^1.2.2",
 		"pols-logger": "^1.0.0",
-		"pols-utils": "^4.1.0",
+		"pols-utils": "^4.1.2",
 		"pols-validator": "^2.1.1",
 		"shell-quote": "^1.8.2"
 	}
