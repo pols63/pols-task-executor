@@ -25,6 +25,8 @@ const taskExecutor = new PTaskExecutor({
 // taskExecutor.onStd = (params) => console.log(params)
 taskExecutor.start()
 
+console.log(taskExecutor.tasks)
+
 // taskExecutor.runTask('1')
 
 // setTimeout(() => {

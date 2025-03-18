@@ -33,13 +33,23 @@ export type PTaskParams = {
 	logger?: PLogger
 }
 
-export type PTaskSystem = PTaskDeclaration & {
-	id: string,
+export class PTaskSystem {
+	id: string
+	schedule: PSchedule | PSchedule[]
+	command: string
+	workPath?: string
 	status: PTaskStatuses
 	runningStart?: PDate
 	runningEnd?: PDate
 	duration?: number
 	process?: ReturnType<typeof spawn>
+
+	toJSON() {
+		return {
+			...this,
+			process: undefined
+		}
+	}
 }
 
 export type PSchedule = {
@@ -250,11 +260,11 @@ export class PTaskExecutor {
 
 			const isNew = !this.tasks[id]
 
-			const task = this.tasks[id] ?? {
-				...taskDeclaration,
-				id,
-				status: PTaskStatuses.REPOSE
-			} as PTaskSystem
+			const task = this.tasks[id] ?? new PTaskSystem
+			if (isNew) {
+				task.id = id
+				task.status = PTaskStatuses.REPOSE
+			}
 			task.command = taskDeclaration.command
 			task.workPath = taskDeclaration.workPath
 			task.schedule = taskDeclaration.schedule
