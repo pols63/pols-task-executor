@@ -36,7 +36,7 @@ export type PTaskParams = {
 export class PTaskSystem {
 	id: string
 	schedule: PSchedule | PSchedule[]
-	command: string
+	command: string | (() => Promise<void>)
 	workPath?: string
 	status: PTaskStatuses
 	runningStart?: PDate
@@ -92,43 +92,51 @@ const run = (pTaskExecutor: PTaskExecutor, task: PTaskSystem, typeOfExecution: P
 	try {
 		pTaskExecutor.onBeforeExecute?.({ task, type: typeOfExecution })
 
-		const args = shellQuote.parse(task.command).filter(v => typeof v == 'string')
-		const process = spawn(args[0], args.slice(1), {
-			cwd: task.workPath,
-			stdio: 'pipe',
-		})
+		if (typeof task.command == 'string') {
+			const args = shellQuote.parse(task.command).filter(v => typeof v == 'string')
+			const process = spawn(args[0], args.slice(1), {
+				cwd: task.workPath,
+				stdio: 'pipe',
+			})
 
-		task.process = process
+			task.process = process
 
-		process.on('close', (code) => {
-			if (task.status == PTaskStatuses.RUNNING) {
+			process.on('close', (code) => {
+				if (task.status == PTaskStatuses.RUNNING) {
+					finishTask(task)
+					pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} finalizada (Exitcode ${code})` })
+				}
+
+				const killMethod = killMethods[task.id]
+				try {
+					pTaskExecutor.onAfterExecute?.({ task, type: typeOfExecution, code, error: code != 0, killed: !!killMethod })
+				} catch (error) {
+					pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} dio error en el evento "onAfterExecute"`, body: error })
+				}
+				killMethod?.()
+				delete killMethods[task.id]
+			})
+
+			process.on('error', (error) => {
+				pTaskExecutor.onStd?.({ task, type: PStdType.ERROR, data: error.message + '\n' + error.stack })
 				finishTask(task)
-				pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} finalizada (Exitcode ${code})` })
-			}
+				pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} finalizada con error`, body: error })
+			})
 
-			const killMethod = killMethods[task.id]
-			try {
-				pTaskExecutor.onAfterExecute?.({ task, type: typeOfExecution, code, error: code != 0, killed: !!killMethod })
-			} catch (error) {
-				pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} dio error en el evento "onAfterExecute"`, body: error })
-			}
-			killMethod?.()
-			delete killMethods[task.id]
-		})
+			process.stdout.on('data', (data) => {
+				pTaskExecutor.onStd?.({ task, type: PStdType.OUT, data: data.toString().trim() })
+			})
 
-		process.on('error', (error) => {
-			pTaskExecutor.onStd?.({ task, type: PStdType.ERROR, data: error.message + '\n' + error.stack })
-			finishTask(task)
-			pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} finalizada con error`, body: error })
-		})
-
-		process.stdout.on('data', (data) => {
-			pTaskExecutor.onStd?.({ task, type: PStdType.OUT, data: data.toString().trim() })
-		})
-
-		process.stderr.on('data', (data) => {
-			pTaskExecutor.onStd?.({ task, type: PStdType.ERROR, data: data.toString().trim() })
-		})
+			process.stderr.on('data', (data) => {
+				pTaskExecutor.onStd?.({ task, type: PStdType.ERROR, data: data.toString().trim() })
+			})
+		} else {
+			task.command.bind(pTaskExecutor)().then(() => {
+				pTaskExecutor.log.info({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} finalizada` })
+			}).catch((error: Error) => {
+				pTaskExecutor.log.error({ label: 'TASK-EXECUTOR', description: `Tarea ${task.id} finalizada con error`, body: error })
+			})
+		}
 	} catch (error) {
 		task.status = PTaskStatuses.REPOSE
 		task.runningEnd = new PDate
