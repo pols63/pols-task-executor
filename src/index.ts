@@ -6,6 +6,8 @@ import { PLogger, PLoggerLogParams } from 'pols-logger'
 import { PDate } from 'pols-date'
 import os from 'os'
 
+export type PCommand = string | (() => Promise<void>)
+
 export enum PStdType {
 	OUT = 'OUT',
 	ERROR = 'ERROR'
@@ -24,7 +26,7 @@ export enum PTaskExecutorStatuses {
 export type PTaskDeclaration = {
 	id?: string
 	schedule: PSchedule | PSchedule[]
-	command: string
+	command: PCommand
 	workPath?: string
 }
 
@@ -36,7 +38,7 @@ export type PTaskParams = {
 export class PTaskSystem {
 	id: string
 	schedule: PSchedule | PSchedule[]
-	command: string | (() => Promise<void>)
+	command: PCommand
 	workPath?: string
 	status: PTaskStatuses
 	runningStart?: PDate
